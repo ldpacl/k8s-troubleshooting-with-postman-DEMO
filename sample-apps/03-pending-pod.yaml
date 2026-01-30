@@ -1,0 +1,39 @@
+# 03-pending-pod.yaml
+# Demonstrates Pending pod scenario
+# The pod requests an impossible amount of memory that cannot be scheduled
+
+# Troubleshooting Focus:
+# - kubectl: kubectl describe pod (look for Events section - FailedScheduling)
+# - Postman: GET /api/v1/namespaces/{namespace}/pods/{pod} for status.phase and status.conditions
+#            GET /api/v1/namespaces/{namespace}/events?fieldSelector=involvedObject.name=pending-app
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pending-app
+  namespace: troubleshooting-demo
+  labels:
+    app: pending-app
+    scenario: pending
+    demo: troubleshooting
+  annotations:
+    issue: "Pod stuck in Pending state"
+    cause: "Requesting 100Gi memory - no node can satisfy this request"
+    troubleshooting-tip: "Check pod conditions and scheduler events for FailedScheduling"
+spec:
+  containers:
+    - name: greedy-container
+      image: nginx:1.25-alpine
+      ports:
+        - containerPort: 80
+      resources:
+        requests:
+          # Requesting an absurdly large amount of memory
+          # No node in a Kind cluster can satisfy this
+          memory: "100Gi"
+          cpu: "100m"
+        limits:
+          memory: "100Gi"
+          cpu: "200m"
+  restartPolicy: Always
+

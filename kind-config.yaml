@@ -1,0 +1,25 @@
+# Kind cluster configuration for Kubernetes Troubleshooting Demo
+# This creates a simple single-node cluster suitable for demonstrations
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: k8s-troubleshooting-demo
+
+nodes:
+  # Single control-plane node (sufficient for demo purposes)
+  - role: control-plane
+    # Expose the API server on a predictable port for Postman access
+    extraPortMappings:
+      - containerPort: 6443
+        hostPort: 6443
+        protocol: TCP
+
+# Networking configuration
+networking:
+  # Use default CNI
+  disableDefaultCNI: false
+  # Pod subnet
+  podSubnet: "10.244.0.0/16"
+  # Service subnet
+  serviceSubnet: "10.96.0.0/12"
+

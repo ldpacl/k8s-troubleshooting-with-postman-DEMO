@@ -1,0 +1,38 @@
+# 02-imagepull-error.yaml
+# Demonstrates ImagePullBackOff scenario
+# The pod references a non-existent image tag
+
+# Troubleshooting Focus:
+# - kubectl: kubectl describe pod (look for Events section)
+# - Postman: GET /api/v1/namespaces/{namespace}/pods/{pod} for status.containerStatuses[].state.waiting
+#            GET /api/v1/namespaces/{namespace}/events?fieldSelector=involvedObject.name=imagepull-app
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: imagepull-app
+  namespace: troubleshooting-demo
+  labels:
+    app: imagepull-app
+    scenario: imagepull-error
+    demo: troubleshooting
+  annotations:
+    issue: "ImagePullBackOff / ErrImagePull"
+    cause: "Image tag 'nginx:this-tag-does-not-exist-v999' does not exist"
+    troubleshooting-tip: "Check image name and tag, verify registry access"
+spec:
+  containers:
+    - name: bad-image
+      # This image tag does not exist - will cause ImagePullBackOff
+      image: nginx:this-tag-does-not-exist-v999
+      ports:
+        - containerPort: 80
+      resources:
+        requests:
+          memory: "64Mi"
+          cpu: "50m"
+        limits:
+          memory: "128Mi"
+          cpu: "100m"
+  restartPolicy: Always
+

@@ -1,0 +1,44 @@
+# 01-crashloop-app.yaml
+# Demonstrates CrashLoopBackOff scenario
+# The container runs a command that exits immediately, causing continuous restarts
+
+# Troubleshooting Focus:
+# - kubectl: kubectl describe pod, kubectl logs, kubectl get events
+# - Postman: GET /api/v1/namespaces/{namespace}/pods/{pod} for status.containerStatuses
+#            GET /api/v1/namespaces/{namespace}/pods/{pod}/log for container logs
+#            GET /api/v1/namespaces/{namespace}/events for related events
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: crashloop-app
+  namespace: troubleshooting-demo
+  labels:
+    app: crashloop-app
+    scenario: crashloop
+    demo: troubleshooting
+  annotations:
+    issue: "CrashLoopBackOff"
+    cause: "Container command exits with error code 1"
+    troubleshooting-tip: "Check container logs and exit code in pod status"
+spec:
+  containers:
+    - name: failing-container
+      image: busybox:1.36
+      # This command will fail immediately, causing CrashLoopBackOff
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          echo "Application starting..."
+          echo "ERROR: Missing required configuration file /etc/app/config.yaml"
+          echo "Application failed to start!"
+          exit 1
+      resources:
+        requests:
+          memory: "32Mi"
+          cpu: "10m"
+        limits:
+          memory: "64Mi"
+          cpu: "50m"
+  restartPolicy: Always
+
