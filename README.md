@@ -22,19 +22,18 @@ Move-Item .\kind-windows-amd64.exe C:\Windows\kind.exe
 
 ## Quick Start
 
-### 1. Create the Kind Cluster and Deploy Sample Apps
+### 1. Deploy Sample Apps
 
 ```powershell
-cd setup
-.\setup-cluster.ps1
+# Create namespaces
+kubectl create namespace demo
+kubectl create namespace demo2
+
+# Deploy sample apps
+kubectl apply -f sample-apps/
 ```
 
-This script will:
-- Create a Kind cluster named `k8s-troubleshooting-demo`
-- Deploy sample applications with various issues
-- Display cluster information
-
-### 2. Start kubectl Proxy (Method 1 - Recommended for Demo)
+### 2. Start kubectl Proxy
 
 ```powershell
 kubectl proxy --port=8001
@@ -42,24 +41,47 @@ kubectl proxy --port=8001
 
 Keep this running in a separate terminal. Postman can now access the API at `http://localhost:8001`.
 
-### 3. Get API Credentials (Method 2 - Token Authentication)
-
-```powershell
-cd setup
-.\get-api-credentials.ps1
-```
-
-This will output the bearer token and API server URL for direct authentication.
-
-### 4. Import Postman Collection
+### 3. Import Postman Collection & Environment
 
 1. Open Postman
 2. Click **Import** button
 3. Select files from the `postman/` folder:
    - `K8s-Troubleshooting.postman_collection.json`
    - `Kind-Proxy.postman_environment.json`
-   - `Kind-Token-Auth.postman_environment.json`
-4. Select the appropriate environment from the dropdown (top-right)
+4. Select **Kind-Proxy** environment from the dropdown (top-right)
+
+### 4. Run Diagnostics
+
+1. Open **Full Pod Diagnostics** request
+2. Click **Send**
+3. View the **Console** (View → Show Postman Console) for the full report
+
+## Postman Collection
+
+The collection contains 3 streamlined requests:
+
+| Request | Purpose |
+|---------|---------|
+| **Full Pod Diagnostics** | Comprehensive analysis of ALL pods in namespace |
+| **Get Pod Logs** | Fetch logs for a specific pod |
+| **Get Pod Events** | Get Kubernetes events for a specific pod |
+
+### Switching Namespaces
+
+**Important:** Environment variables take precedence over Collection variables.
+
+To switch namespaces:
+1. Click on your environment name (e.g., **Kind-Proxy**) in top-right
+2. Click **Edit** (or the eye icon → Edit)
+3. Change the `namespace` value (e.g., `demo`, `demo2`, `default`)
+4. Click **Save**
+
+| Variable | Description | Example Values |
+|----------|-------------|----------------|
+| `base_url` | Kubernetes API URL | `http://localhost:8001` |
+| `namespace` | Target namespace to scan | `demo`, `demo2`, `default` |
+| `pod_name` | Pod name for logs/events | `pod-1`, `broken-worker` |
+| `previous` | Get crashed container logs | `true` or `false` |
 
 ## Project Structure
 
@@ -71,10 +93,11 @@ postman/
 │   ├── setup-cluster.ps1                  # Create Kind cluster + deploy apps
 │   └── get-api-credentials.ps1            # Extract token and certificates
 ├── sample-apps/
-│   ├── 00-healthy-app.yaml                # Working baseline app
-│   ├── 01-crashloop-app.yaml              # CrashLoopBackOff scenario
-│   ├── 02-imagepull-error.yaml            # ImagePullBackOff scenario
-│   └── 03-pending-pod.yaml                # Pending pod scenario
+│   ├── 00-healthy-app.yaml                # Healthy pod (namespace: demo)
+│   ├── 01-crashloop-app.yaml              # CrashLoopBackOff (namespace: demo)
+│   ├── 02-imagepull-error.yaml            # ImagePullBackOff (namespace: demo)
+│   ├── 03-pending-pod.yaml                # Pending pod (namespace: demo)
+│   └── demo2-pods.yaml                    # Mixed pods (namespace: demo2)
 ├── kubectl-commands/
 │   └── troubleshooting-reference.md       # kubectl commands reference
 ├── postman/
@@ -85,18 +108,67 @@ postman/
     └── demo-script.md                     # Presentation talking points
 ```
 
-## Troubleshooting Scenarios
+## Sample Apps
 
-| Scenario | Pod Name | Issue | Root Cause |
-|----------|----------|-------|------------|
-| Healthy | healthy-app | None | Working baseline |
-| CrashLoopBackOff | crashloop-app | Container keeps restarting | Invalid command causes immediate exit |
-| ImagePullBackOff | imagepull-app | Cannot pull image | Non-existent image tag |
-| Pending | pending-app | Pod stuck in Pending | Requesting 100Gi memory (unschedulable) |
+### Namespace: demo
+
+| Pod Name | Status | Issue |
+|----------|--------|-------|
+| pod-1 | Healthy | Working baseline (nginx) |
+| pod-2 | CrashLoopBackOff | Container exits with error |
+| pod-3 | ImagePullBackOff | Non-existent image tag |
+| pod-4 | Pending | Requests 100Gi memory |
+
+### Namespace: demo2
+
+| Pod Name | Status | Issue |
+|----------|--------|-------|
+| web-server | Healthy | nginx web server |
+| cache-server | Healthy | redis cache |
+| broken-worker | CrashLoopBackOff | Database connection error |
+| bad-image-app | ImagePullBackOff | Fake internal image |
+| resource-hog | Pending | Requests 500Gi memory |
+
+## Console Output Example
+
+When you run **Full Pod Diagnostics**, the Console shows:
+
+```
+╔══════════════════════════════════════════════════════════════╗
+║         KUBERNETES POD DIAGNOSTICS REPORT                   ║
+╚══════════════════════════════════════════════════════════════╝
+
+📍 Namespace: demo
+📊 Total Pods: 4
+✅ Healthy: 1
+❌ Unhealthy: 3
+
+┌──────────────────────────────────────────────────────────────┐
+│ ✅ HEALTHY PODS                                              │
+└──────────────────────────────────────────────────────────────┘
+  ✓ pod-1
+    Phase: Running | Containers: nginx
+
+┌──────────────────────────────────────────────────────────────┐
+│ ❌ UNHEALTHY PODS                                            │
+└──────────────────────────────────────────────────────────────┘
+  ✗ pod-2
+    Phase: Running
+    ├─ Container: container-123xyz
+    │  State: Waiting
+    │  Reason: CrashLoopBackOff
+    │  Restart Count: 5
+
+┌──────────────────────────────────────────────────────────────┐
+│ 📋 ISSUE SUMMARY                                             │
+└──────────────────────────────────────────────────────────────┘
+  🔄 CrashLoopBackOff: 1 occurrence(s)
+  🖼️ ImagePullBackOff: 1 occurrence(s)
+```
 
 ## API Access Methods
 
-### Method 1: kubectl proxy (Simple)
+### Method 1: kubectl proxy (Recommended for Demo)
 
 ```powershell
 kubectl proxy --port=8001
@@ -104,18 +176,17 @@ kubectl proxy --port=8001
 
 - **Base URL**: `http://localhost:8001`
 - **Authentication**: None required (proxy handles it)
-- **Best for**: Demos, local development
 
 ### Method 2: Direct with Bearer Token
 
 ```powershell
-# Get the token
-$TOKEN = kubectl create token default --duration=24h
+cd setup
+.\get-api-credentials.ps1
 ```
 
-- **Base URL**: `https://127.0.0.1:<port>` (get port from cluster info)
+- **Base URL**: `https://127.0.0.1:6443`
 - **Header**: `Authorization: Bearer <token>`
-- **Best for**: Production-like scenarios, automation
+- Update token in **Kind-Token-Auth** environment
 
 ## kubectl vs Postman Comparison
 
@@ -123,16 +194,18 @@ $TOKEN = kubectl create token default --duration=24h
 |--------|---------|---------|
 | Response Format | Plain text/YAML | Structured JSON with highlighting |
 | Reusability | Re-type or script | Saved requests, one-click |
-| Multi-cluster | Context switching | Environment dropdown |
-| Filtering | grep/jq piping | Query params + Visualizer |
-| Automation | Shell scripts | Collection Runner + Tests |
+| Multi-namespace | Add `-n` flag each time | Change environment variable |
+| Automation | Shell scripts | Built-in tests + Console output |
 | Sharing | Documentation | Export/Import collections |
-| Learning Curve | CLI commands | Visual interface |
 
 ## Cleanup
 
 ```powershell
-# Delete the Kind cluster
+# Delete sample apps
+kubectl delete namespace demo
+kubectl delete namespace demo2
+
+# Or delete the entire Kind cluster
 kind delete cluster --name k8s-troubleshooting-demo
 ```
 
@@ -141,4 +214,3 @@ kind delete cluster --name k8s-troubleshooting-demo
 - [Kubernetes API Reference](https://kubernetes.io/docs/reference/kubernetes-api/)
 - [Kind Documentation](https://kind.sigs.k8s.io/)
 - [Postman Learning Center](https://learning.postman.com/)
-
