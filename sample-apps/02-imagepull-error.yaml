@@ -10,8 +10,8 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: imagepull-app
-  namespace: troubleshooting-demo
+  name: pod-3
+  namespace: demo
   labels:
     app: imagepull-app
     scenario: imagepull-error
