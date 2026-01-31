@@ -1,1026 +1,472 @@
 {
 	"info": {
-		"_postman_id": "k8s-troubleshooting-demo-2024",
-		"name": "K8s Troubleshooting Demo",
-		"description": "A collection demonstrating Kubernetes troubleshooting using Postman.\n\n## Overview\nThis collection provides API requests to troubleshoot common Kubernetes issues:\n- CrashLoopBackOff\n- ImagePullBackOff\n- Pending pods\n\n## Prerequisites\n1. Kind cluster running with sample apps deployed\n2. Either kubectl proxy running (port 8001) OR token authentication configured\n\n## Usage\n1. Select the appropriate environment (Kind-Proxy or Kind-Token-Auth)\n2. Run individual requests or use Collection Runner\n\n## Comparison with kubectl\nEach request includes notes comparing the equivalent kubectl command.",
+		"_postman_id": "k8s-troubleshooting-v2",
+		"name": "K8s Troubleshooting",
+		"description": "Comprehensive Kubernetes troubleshooting with a single diagnostic request.\n\n## Usage\n1. Set `base_url` and `namespace` in your environment\n2. Run the 'Full Pod Diagnostics' request\n3. Check the Console for detailed analysis\n\n## Variables\n- `base_url`: Kubernetes API URL (e.g., http://localhost:8001)\n- `namespace`: Target namespace to analyze",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
 		{
-			"name": "Core Operations",
-			"item": [
+			"name": "Full Pod Diagnostics",
+			"event": [
 				{
-					"name": "List All Pods",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"// Parse response",
-									"const response = pm.response.json();",
-									"",
-									"// Test: Request was successful",
-									"pm.test('Status code is 200', function() {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"// Test: Response contains pods",
-									"pm.test('Response contains items array', function() {",
-									"    pm.expect(response).to.have.property('items');",
-									"    pm.expect(response.items).to.be.an('array');",
-									"});",
-									"",
-									"// Count pods by status",
-									"const pods = response.items;",
-									"const statusCount = {};",
-									"",
-									"pods.forEach(pod => {",
-									"    const phase = pod.status.phase;",
-									"    statusCount[phase] = (statusCount[phase] || 0) + 1;",
-									"});",
-									"",
-									"console.log('Pod Status Summary:', statusCount);",
-									"",
-									"// Check for problem pods",
-									"const problemPods = pods.filter(pod => {",
-									"    return pod.status.phase !== 'Running' && pod.status.phase !== 'Succeeded';",
-									"});",
-									"",
-									"if (problemPods.length > 0) {",
-									"    console.warn('⚠️ Problem pods detected:', problemPods.map(p => p.metadata.name));",
-									"}",
-									"",
-									"// Store pod names for later use",
-									"if (pods.length > 0) {",
-									"    pm.collectionVariables.set('first_pod_name', pods[0].metadata.name);",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/pods",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "namespaces", "{{namespace}}", "pods"]
-						},
-						"description": "**kubectl equivalent:**\n```\nkubectl get pods -n troubleshooting-demo\n```\n\n**Postman advantages:**\n- Structured JSON response with syntax highlighting\n- Automated tests to detect problem pods\n- Response stored for further analysis"
-					},
-					"response": []
-				},
-				{
-					"name": "Get Pod Details",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"const response = pm.response.json();",
-									"",
-									"pm.test('Status code is 200', function() {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"pm.test('Pod metadata exists', function() {",
-									"    pm.expect(response).to.have.property('metadata');",
-									"    pm.expect(response.metadata).to.have.property('name');",
-									"});",
-									"",
-									"// Analyze pod status",
-									"const status = response.status;",
-									"console.log('Pod Phase:', status.phase);",
-									"",
-									"// Check container statuses",
-									"if (status.containerStatuses) {",
-									"    status.containerStatuses.forEach(container => {",
-									"        console.log(`Container: ${container.name}`);",
-									"        console.log(`  Ready: ${container.ready}`);",
-									"        console.log(`  Restart Count: ${container.restartCount}`);",
-									"        ",
-									"        if (container.state.waiting) {",
-									"            console.warn(`  ⚠️ Waiting: ${container.state.waiting.reason}`);",
-									"            console.warn(`  Message: ${container.state.waiting.message || 'N/A'}`);",
-									"        }",
-									"        if (container.state.terminated) {",
-									"            console.warn(`  ⚠️ Terminated: ${container.state.terminated.reason}`);",
-									"            console.warn(`  Exit Code: ${container.state.terminated.exitCode}`);",
-									"        }",
-									"    });",
-									"}",
-									"",
-									"// Check conditions",
-									"if (status.conditions) {",
-									"    const failedConditions = status.conditions.filter(c => c.status !== 'True');",
-									"    if (failedConditions.length > 0) {",
-									"        console.warn('⚠️ Failed conditions:', failedConditions.map(c => c.type));",
-									"    }",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/pods/{{pod_name}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "namespaces", "{{namespace}}", "pods", "{{pod_name}}"]
-						},
-						"description": "**kubectl equivalent:**\n```\nkubectl describe pod <pod_name> -n troubleshooting-demo\n```\n\n**Postman advantages:**\n- Programmatic access to all pod details\n- Tests automatically analyze container states\n- Easy to drill into specific fields\n\n**Key fields for troubleshooting:**\n- `status.phase` - Overall pod phase\n- `status.conditions` - Detailed conditions\n- `status.containerStatuses[].state` - Container state (waiting/running/terminated)\n- `status.containerStatuses[].restartCount` - Number of restarts"
-					},
-					"response": []
-				},
-				{
-					"name": "Get Pod Logs",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('Status code is 200', function() {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"// Log output is plain text",
-									"const logs = pm.response.text();",
-									"",
-									"if (logs.length === 0) {",
-									"    console.log('No logs available (container may not have started)');",
-									"} else {",
-									"    console.log('=== Container Logs ===');",
-									"    console.log(logs);",
-									"    ",
-									"    // Check for common error patterns",
-									"    const errorPatterns = ['ERROR', 'Error', 'error', 'FATAL', 'Exception', 'failed'];",
-									"    errorPatterns.forEach(pattern => {",
-									"        if (logs.includes(pattern)) {",
-									"            console.warn(`⚠️ Found '${pattern}' in logs`);",
-									"        }",
-									"    });",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/pods/{{pod_name}}/log?tailLines=100",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "namespaces", "{{namespace}}", "pods", "{{pod_name}}", "log"],
-							"query": [
-								{
-									"key": "tailLines",
-									"value": "100",
-									"description": "Number of lines from end of log"
-								},
-								{
-									"key": "previous",
-									"value": "true",
-									"description": "Get logs from previous container instance",
-									"disabled": true
-								},
-								{
-									"key": "timestamps",
-									"value": "true",
-									"description": "Include timestamps",
-									"disabled": true
-								}
-							]
-						},
-						"description": "**kubectl equivalent:**\n```\nkubectl logs <pod_name> -n troubleshooting-demo --tail=100\nkubectl logs <pod_name> -n troubleshooting-demo --previous  # Previous container\n```\n\n**Postman advantages:**\n- Query parameters easily toggleable\n- Tests can scan for error patterns\n- Save responses for comparison\n\n**Useful query parameters:**\n- `tailLines` - Last N lines\n- `previous` - Logs from previous container (useful for CrashLoopBackOff)\n- `timestamps` - Include timestamps\n- `sinceSeconds` - Logs from last N seconds"
-					},
-					"response": []
-				},
-				{
-					"name": "Get Previous Container Logs",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"// For crashed containers, we need previous logs",
-									"if (pm.response.code === 200) {",
-									"    const logs = pm.response.text();",
-									"    console.log('=== Previous Container Logs ===');",
-									"    console.log(logs);",
-									"} else if (pm.response.code === 400) {",
-									"    console.log('No previous container logs available');",
-									"    console.log('This means the container has not crashed/restarted');",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/pods/{{pod_name}}/log?previous=true&tailLines=50",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "namespaces", "{{namespace}}", "pods", "{{pod_name}}", "log"],
-							"query": [
-								{
-									"key": "previous",
-									"value": "true"
-								},
-								{
-									"key": "tailLines",
-									"value": "50"
-								}
-							]
-						},
-						"description": "**kubectl equivalent:**\n```\nkubectl logs <pod_name> -n troubleshooting-demo --previous --tail=50\n```\n\n**When to use:**\nWhen a container is in CrashLoopBackOff, the current container may not have logs. Use `previous=true` to get logs from the crashed container.\n\n**Note:** Returns 400 if no previous container exists."
-					},
-					"response": []
-				},
-				{
-					"name": "Get Namespace Events",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"const response = pm.response.json();",
-									"",
-									"pm.test('Status code is 200', function() {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"const events = response.items;",
-									"console.log(`Total events: ${events.length}`);",
-									"",
-									"// Sort by last timestamp (newest first)",
-									"events.sort((a, b) => {",
-									"    const timeA = new Date(a.lastTimestamp || a.eventTime || 0);",
-									"    const timeB = new Date(b.lastTimestamp || b.eventTime || 0);",
-									"    return timeB - timeA;",
-									"});",
-									"",
-									"// Show recent events",
-									"console.log('=== Recent Events ===');",
-									"events.slice(0, 10).forEach(event => {",
-									"    const icon = event.type === 'Warning' ? '⚠️' : 'ℹ️';",
-									"    console.log(`${icon} [${event.type}] ${event.involvedObject.name}: ${event.reason} - ${event.message}`);",
-									"});",
-									"",
-									"// Count warnings",
-									"const warnings = events.filter(e => e.type === 'Warning');",
-									"if (warnings.length > 0) {",
-									"    console.warn(`\\n⚠️ ${warnings.length} warning event(s) found`);",
-									"    ",
-									"    // Group by reason",
-									"    const reasonCount = {};",
-									"    warnings.forEach(w => {",
-									"        reasonCount[w.reason] = (reasonCount[w.reason] || 0) + 1;",
-									"    });",
-									"    console.log('Warning reasons:', reasonCount);",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/events",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "namespaces", "{{namespace}}", "events"]
-						},
-						"description": "**kubectl equivalent:**\n```\nkubectl get events -n troubleshooting-demo\nkubectl get events -n troubleshooting-demo --sort-by='.lastTimestamp'\n```\n\n**Postman advantages:**\n- Sort and filter events programmatically\n- Count warnings automatically\n- Group by reason for patterns\n\n**Common event reasons:**\n- `Scheduled` - Pod assigned to node\n- `Pulled` - Image pulled successfully\n- `Created` - Container created\n- `Started` - Container started\n- `Failed` - Various failures\n- `BackOff` - Back-off restarting\n- `FailedScheduling` - Cannot schedule pod"
-					},
-					"response": []
-				},
-				{
-					"name": "Get Events for Specific Pod",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"const response = pm.response.json();",
-									"",
-									"pm.test('Status code is 200', function() {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"const events = response.items;",
-									"const podName = pm.variables.get('pod_name');",
-									"",
-									"console.log(`Events for pod '${podName}': ${events.length}`);",
-									"",
-									"events.forEach(event => {",
-									"    const icon = event.type === 'Warning' ? '⚠️' : 'ℹ️';",
-									"    const time = event.lastTimestamp || event.eventTime || 'N/A';",
-									"    console.log(`${icon} [${time}] ${event.reason}: ${event.message}`);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/events?fieldSelector=involvedObject.name={{pod_name}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "namespaces", "{{namespace}}", "events"],
-							"query": [
-								{
-									"key": "fieldSelector",
-									"value": "involvedObject.name={{pod_name}}"
-								}
-							]
-						},
-						"description": "**kubectl equivalent:**\n```\nkubectl get events -n troubleshooting-demo --field-selector involvedObject.name=<pod_name>\n```\n\n**Postman advantages:**\n- Filter built into the request URL\n- Easy to switch pod names via variable\n- Automated event analysis\n\n**This is especially useful for:**\n- ImagePullBackOff - See image pull errors\n- Pending pods - See FailedScheduling reasons\n- Any pod-specific issues"
-					},
-					"response": []
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// ============================================================",
+							"// KUBERNETES POD DIAGNOSTICS - COMPREHENSIVE ANALYSIS",
+							"// ============================================================",
+							"// This script analyzes all pods in the namespace and provides:",
+							"// - List of healthy pods",
+							"// - List of unhealthy pods with specific issues",
+							"// - Container-level details for each problem",
+							"// - Summary statistics",
+							"// ============================================================",
+							"",
+							"const response = pm.response.json();",
+							"const namespace = pm.variables.get('namespace');",
+							"",
+							"// Validate response",
+							"pm.test('API request successful', function() {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response contains pods', function() {",
+							"    pm.expect(response).to.have.property('items');",
+							"});",
+							"",
+							"const pods = response.items;",
+							"",
+							"// Data structures for results",
+							"const healthyPods = [];",
+							"const unhealthyPods = [];",
+							"const issueTypes = {};",
+							"",
+							"// ============================================================",
+							"// ANALYZE EACH POD",
+							"// ============================================================",
+							"",
+							"pods.forEach(pod => {",
+							"    const podName = pod.metadata.name;",
+							"    const phase = pod.status.phase;",
+							"    const containerStatuses = pod.status.containerStatuses || [];",
+							"    const initContainerStatuses = pod.status.initContainerStatuses || [];",
+							"    const conditions = pod.status.conditions || [];",
+							"    ",
+							"    let isHealthy = true;",
+							"    let issues = [];",
+							"    let containerIssues = [];",
+							"    ",
+							"    // ----------------------------------------------------------",
+							"    // Check 1: Pod Phase",
+							"    // ----------------------------------------------------------",
+							"    if (phase === 'Pending') {",
+							"        isHealthy = false;",
+							"        const scheduleCondition = conditions.find(c => c.type === 'PodScheduled');",
+							"        if (scheduleCondition && scheduleCondition.status === 'False') {",
+							"            issues.push({",
+							"                type: 'Pending',",
+							"                reason: scheduleCondition.reason || 'Unknown',",
+							"                message: scheduleCondition.message || 'Pod cannot be scheduled'",
+							"            });",
+							"        } else {",
+							"            issues.push({",
+							"                type: 'Pending',",
+							"                reason: 'WaitingForResources',",
+							"                message: 'Pod is waiting to be scheduled'",
+							"            });",
+							"        }",
+							"    } else if (phase === 'Failed') {",
+							"        isHealthy = false;",
+							"        issues.push({",
+							"            type: 'Failed',",
+							"            reason: pod.status.reason || 'Unknown',",
+							"            message: pod.status.message || 'Pod has failed'",
+							"        });",
+							"    }",
+							"    ",
+							"    // ----------------------------------------------------------",
+							"    // Check 2: Container Statuses",
+							"    // ----------------------------------------------------------",
+							"    containerStatuses.forEach(cs => {",
+							"        const containerName = cs.name;",
+							"        const restartCount = cs.restartCount || 0;",
+							"        ",
+							"        // Container in Waiting state",
+							"        if (cs.state && cs.state.waiting) {",
+							"            isHealthy = false;",
+							"            const waiting = cs.state.waiting;",
+							"            containerIssues.push({",
+							"                container: containerName,",
+							"                state: 'Waiting',",
+							"                reason: waiting.reason || 'Unknown',",
+							"                message: waiting.message || '',",
+							"                restartCount: restartCount",
+							"            });",
+							"            ",
+							"            // Track issue types",
+							"            const issueType = waiting.reason || 'Unknown';",
+							"            issueTypes[issueType] = (issueTypes[issueType] || 0) + 1;",
+							"        }",
+							"        ",
+							"        // Container in Terminated state (and not successful)",
+							"        if (cs.state && cs.state.terminated) {",
+							"            const terminated = cs.state.terminated;",
+							"            if (terminated.exitCode !== 0) {",
+							"                isHealthy = false;",
+							"                containerIssues.push({",
+							"                    container: containerName,",
+							"                    state: 'Terminated',",
+							"                    reason: terminated.reason || 'Error',",
+							"                    exitCode: terminated.exitCode,",
+							"                    message: terminated.message || '',",
+							"                    restartCount: restartCount",
+							"                });",
+							"                issueTypes['Terminated'] = (issueTypes['Terminated'] || 0) + 1;",
+							"            }",
+							"        }",
+							"        ",
+							"        // Container running but not ready",
+							"        if (cs.state && cs.state.running && !cs.ready) {",
+							"            isHealthy = false;",
+							"            containerIssues.push({",
+							"                container: containerName,",
+							"                state: 'NotReady',",
+							"                reason: 'ContainerNotReady',",
+							"                message: 'Container is running but not passing readiness checks',",
+							"                restartCount: restartCount",
+							"            });",
+							"            issueTypes['NotReady'] = (issueTypes['NotReady'] || 0) + 1;",
+							"        }",
+							"        ",
+							"        // High restart count warning",
+							"        if (restartCount > 5 && cs.ready) {",
+							"            containerIssues.push({",
+							"                container: containerName,",
+							"                state: 'Warning',",
+							"                reason: 'HighRestartCount',",
+							"                message: `Container has restarted ${restartCount} times`,",
+							"                restartCount: restartCount",
+							"            });",
+							"        }",
+							"    });",
+							"    ",
+							"    // ----------------------------------------------------------",
+							"    // Check 3: Init Container Statuses",
+							"    // ----------------------------------------------------------",
+							"    initContainerStatuses.forEach(cs => {",
+							"        const containerName = cs.name + ' (init)';",
+							"        ",
+							"        if (cs.state && cs.state.waiting) {",
+							"            isHealthy = false;",
+							"            const waiting = cs.state.waiting;",
+							"            containerIssues.push({",
+							"                container: containerName,",
+							"                state: 'Waiting',",
+							"                reason: waiting.reason || 'Unknown',",
+							"                message: waiting.message || '',",
+							"                restartCount: cs.restartCount || 0",
+							"            });",
+							"        }",
+							"        ",
+							"        if (cs.state && cs.state.terminated && cs.state.terminated.exitCode !== 0) {",
+							"            isHealthy = false;",
+							"            const terminated = cs.state.terminated;",
+							"            containerIssues.push({",
+							"                container: containerName,",
+							"                state: 'Terminated',",
+							"                reason: terminated.reason || 'Error',",
+							"                exitCode: terminated.exitCode,",
+							"                message: terminated.message || '',",
+							"                restartCount: cs.restartCount || 0",
+							"            });",
+							"        }",
+							"    });",
+							"    ",
+							"    // ----------------------------------------------------------",
+							"    // Categorize Pod",
+							"    // ----------------------------------------------------------",
+							"    if (isHealthy) {",
+							"        healthyPods.push({",
+							"            name: podName,",
+							"            phase: phase,",
+							"            containers: containerStatuses.map(c => c.name)",
+							"        });",
+							"    } else {",
+							"        unhealthyPods.push({",
+							"            name: podName,",
+							"            phase: phase,",
+							"            issues: issues,",
+							"            containerIssues: containerIssues",
+							"        });",
+							"    }",
+							"});",
+							"",
+							"// ============================================================",
+							"// OUTPUT RESULTS",
+							"// ============================================================",
+							"",
+							"console.log('╔══════════════════════════════════════════════════════════════╗');",
+							"console.log('║         KUBERNETES POD DIAGNOSTICS REPORT                   ║');",
+							"console.log('╚══════════════════════════════════════════════════════════════╝');",
+							"console.log('');",
+							"console.log(`📍 Namespace: ${namespace}`);",
+							"console.log(`📊 Total Pods: ${pods.length}`);",
+							"console.log(`✅ Healthy: ${healthyPods.length}`);",
+							"console.log(`❌ Unhealthy: ${unhealthyPods.length}`);",
+							"console.log('');",
+							"",
+							"// ----------------------------------------------------------",
+							"// Healthy Pods Section",
+							"// ----------------------------------------------------------",
+							"if (healthyPods.length > 0) {",
+							"    console.log('┌──────────────────────────────────────────────────────────────┐');",
+							"    console.log('│ ✅ HEALTHY PODS                                              │');",
+							"    console.log('└──────────────────────────────────────────────────────────────┘');",
+							"    healthyPods.forEach(pod => {",
+							"        console.log(`  ✓ ${pod.name}`);",
+							"        console.log(`    Phase: ${pod.phase} | Containers: ${pod.containers.join(', ')}`);",
+							"    });",
+							"    console.log('');",
+							"}",
+							"",
+							"// ----------------------------------------------------------",
+							"// Unhealthy Pods Section",
+							"// ----------------------------------------------------------",
+							"if (unhealthyPods.length > 0) {",
+							"    console.log('┌──────────────────────────────────────────────────────────────┐');",
+							"    console.log('│ ❌ UNHEALTHY PODS                                            │');",
+							"    console.log('└──────────────────────────────────────────────────────────────┘');",
+							"    ",
+							"    unhealthyPods.forEach(pod => {",
+							"        console.log(`  ✗ ${pod.name}`);",
+							"        console.log(`    Phase: ${pod.phase}`);",
+							"        ",
+							"        // Pod-level issues",
+							"        pod.issues.forEach(issue => {",
+							"            console.log(`    ├─ Issue: ${issue.type}`);",
+							"            console.log(`    │  Reason: ${issue.reason}`);",
+							"            if (issue.message) {",
+							"                console.log(`    │  Message: ${issue.message}`);",
+							"            }",
+							"        });",
+							"        ",
+							"        // Container-level issues",
+							"        pod.containerIssues.forEach(ci => {",
+							"            console.log(`    ├─ Container: ${ci.container}`);",
+							"            console.log(`    │  State: ${ci.state}`);",
+							"            console.log(`    │  Reason: ${ci.reason}`);",
+							"            if (ci.exitCode !== undefined) {",
+							"                console.log(`    │  Exit Code: ${ci.exitCode}`);",
+							"            }",
+							"            if (ci.message) {",
+							"                console.log(`    │  Message: ${ci.message}`);",
+							"            }",
+							"            console.log(`    │  Restart Count: ${ci.restartCount}`);",
+							"        });",
+							"        console.log('');",
+							"    });",
+							"}",
+							"",
+							"// ----------------------------------------------------------",
+							"// Issue Summary",
+							"// ----------------------------------------------------------",
+							"if (Object.keys(issueTypes).length > 0) {",
+							"    console.log('┌──────────────────────────────────────────────────────────────┐');",
+							"    console.log('│ 📋 ISSUE SUMMARY                                             │');",
+							"    console.log('└──────────────────────────────────────────────────────────────┘');",
+							"    Object.entries(issueTypes).forEach(([type, count]) => {",
+							"        const icon = getIssueIcon(type);",
+							"        console.log(`  ${icon} ${type}: ${count} occurrence(s)`);",
+							"    });",
+							"    console.log('');",
+							"}",
+							"",
+							"// Helper function for icons",
+							"function getIssueIcon(type) {",
+							"    const icons = {",
+							"        'CrashLoopBackOff': '🔄',",
+							"        'ImagePullBackOff': '🖼️',",
+							"        'ErrImagePull': '🖼️',",
+							"        'Pending': '⏳',",
+							"        'Terminated': '💀',",
+							"        'NotReady': '⚠️',",
+							"        'CreateContainerConfigError': '⚙️',",
+							"        'ContainerCreating': '🔨'",
+							"    };",
+							"    return icons[type] || '❓';",
+							"}",
+							"",
+							"// ----------------------------------------------------------",
+							"// Final Tests",
+							"// ----------------------------------------------------------",
+							"pm.test(`Healthy pods: ${healthyPods.length}`, function() {",
+							"    pm.expect(healthyPods.length).to.be.a('number');",
+							"});",
+							"",
+							"pm.test(`Unhealthy pods: ${unhealthyPods.length}`, function() {",
+							"    pm.expect(unhealthyPods.length).to.be.a('number');",
+							"});",
+							"",
+							"// Store results in variables for potential follow-up requests",
+							"pm.collectionVariables.set('diagnostic_results', JSON.stringify({",
+							"    namespace: namespace,",
+							"    total: pods.length,",
+							"    healthy: healthyPods.length,",
+							"    unhealthy: unhealthyPods.length,",
+							"    issueTypes: issueTypes,",
+							"    unhealthyPods: unhealthyPods.map(p => p.name)",
+							"}));",
+							"",
+							"console.log('═══════════════════════════════════════════════════════════════');",
+							"console.log('Diagnostics complete. Change namespace variable to scan another namespace.');",
+							"console.log('═══════════════════════════════════════════════════════════════');"
+						],
+						"type": "text/javascript"
+					}
 				}
 			],
-			"description": "Basic Kubernetes API operations for troubleshooting"
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/pods",
+					"host": ["{{base_url}}"],
+					"path": ["api", "v1", "namespaces", "{{namespace}}", "pods"]
+				},
+				"description": "## Full Pod Diagnostics\n\nThis single request provides comprehensive troubleshooting for all pods in a namespace.\n\n### What it analyzes:\n- Pod phase (Running, Pending, Failed, etc.)\n- Container states (Waiting, Running, Terminated)\n- Container readiness\n- Restart counts\n- Init container issues\n\n### Issues detected:\n- CrashLoopBackOff\n- ImagePullBackOff / ErrImagePull\n- Pending pods (scheduling issues)\n- Failed pods\n- Not ready containers\n- High restart counts\n\n### kubectl equivalent:\n```bash\nkubectl get pods -n <namespace>\nkubectl describe pods -n <namespace>\n```\n\n### Usage:\n1. Set `namespace` variable in environment\n2. Send request\n3. View Console for detailed report"
+			},
+			"response": []
 		},
 		{
-			"name": "Scenario: CrashLoopBackOff",
-			"item": [
+			"name": "Get Pod Logs",
+			"event": [
 				{
-					"name": "1. Check CrashLoop Pod Status",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"const response = pm.response.json();",
-									"",
-									"pm.test('Status code is 200', function() {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"const status = response.status;",
-									"console.log('=== CrashLoopBackOff Analysis ===');",
-									"console.log('Pod Phase:', status.phase);",
-									"",
-									"if (status.containerStatuses) {",
-									"    status.containerStatuses.forEach(cs => {",
-									"        console.log(`\\nContainer: ${cs.name}`);",
-									"        console.log(`  Restart Count: ${cs.restartCount}`);",
-									"        console.log(`  Ready: ${cs.ready}`);",
-									"        ",
-									"        if (cs.state.waiting) {",
-									"            console.warn(`  ⚠️ State: Waiting`);",
-									"            console.warn(`  Reason: ${cs.state.waiting.reason}`);",
-									"            ",
-									"            pm.test('Detected CrashLoopBackOff', function() {",
-									"                pm.expect(cs.state.waiting.reason).to.equal('CrashLoopBackOff');",
-									"            });",
-									"        }",
-									"        ",
-									"        if (cs.lastState && cs.lastState.terminated) {",
-									"            console.log(`  Last Termination:`);",
-									"            console.log(`    Exit Code: ${cs.lastState.terminated.exitCode}`);",
-									"            console.log(`    Reason: ${cs.lastState.terminated.reason}`);",
-									"        }",
-									"    });",
-									"}",
-									"",
-									"console.log('\\n💡 Next: Check pod logs to see why container is failing');"
-								],
-								"type": "text/javascript"
-							}
-						},
-						{
-							"listen": "prerequest",
-							"script": {
-								"exec": [
-									"pm.variables.set('pod_name', 'crashloop-app');"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/pods/crashloop-app",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "namespaces", "{{namespace}}", "pods", "crashloop-app"]
-						},
-						"description": "**kubectl equivalent:**\n```\nkubectl describe pod crashloop-app -n troubleshooting-demo\n```\n\n**What to look for:**\n1. `status.containerStatuses[].state.waiting.reason` = 'CrashLoopBackOff'\n2. `status.containerStatuses[].restartCount` - High number indicates repeated crashes\n3. `status.containerStatuses[].lastState.terminated.exitCode` - Non-zero indicates error"
-					},
-					"response": []
-				},
-				{
-					"name": "2. Get CrashLoop Pod Logs (Previous)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"console.log('=== CrashLoop Container Logs ===');",
-									"",
-									"if (pm.response.code === 200) {",
-									"    const logs = pm.response.text();",
-									"    console.log(logs);",
-									"    ",
-									"    // The crashloop-app outputs an error message",
-									"    pm.test('Logs contain error message', function() {",
-									"        pm.expect(logs).to.include('ERROR');",
-									"    });",
-									"    ",
-									"    console.log('\\n💡 Root cause: Container exits due to missing configuration');",
-									"} else {",
-									"    console.log('Could not retrieve logs. Status:', pm.response.code);",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/pods/crashloop-app/log?previous=true",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "namespaces", "{{namespace}}", "pods", "crashloop-app", "log"],
-							"query": [
-								{
-									"key": "previous",
-									"value": "true"
-								}
-							]
-						},
-						"description": "**kubectl equivalent:**\n```\nkubectl logs crashloop-app -n troubleshooting-demo --previous\n```\n\n**Why previous=true?**\nWhen a container is in CrashLoopBackOff, the current container instance may not have logs yet (it's waiting). We need logs from the *previous* crashed container to see what went wrong."
-					},
-					"response": []
+					"listen": "test",
+					"script": {
+						"exec": [
+							"const podName = pm.variables.get('pod_name');",
+							"const containerName = pm.variables.get('container_name') || 'default';",
+							"",
+							"console.log('╔══════════════════════════════════════════════════════════════╗');",
+							"console.log(`║ 📜 LOGS: ${podName}`);",
+							"console.log('╚══════════════════════════════════════════════════════════════╝');",
+							"",
+							"if (pm.response.code === 200) {",
+							"    const logs = pm.response.text();",
+							"    if (logs.trim().length === 0) {",
+							"        console.log('(No logs available)');",
+							"    } else {",
+							"        console.log(logs);",
+							"    }",
+							"    ",
+							"    // Scan for error patterns",
+							"    const errorPatterns = ['ERROR', 'Error', 'FATAL', 'Exception', 'failed', 'panic'];",
+							"    const foundErrors = errorPatterns.filter(p => logs.includes(p));",
+							"    if (foundErrors.length > 0) {",
+							"        console.log('');",
+							"        console.log('⚠️ Error patterns detected:', foundErrors.join(', '));",
+							"    }",
+							"} else if (pm.response.code === 400) {",
+							"    console.log('No logs available. Container may not have started or no previous container exists.');",
+							"} else {",
+							"    console.log('Error fetching logs:', pm.response.code);",
+							"}"
+						],
+						"type": "text/javascript"
+					}
 				}
 			],
-			"description": "Step-by-step troubleshooting of CrashLoopBackOff scenario"
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/pods/{{pod_name}}/log?tailLines=100&previous={{previous}}",
+					"host": ["{{base_url}}"],
+					"path": ["api", "v1", "namespaces", "{{namespace}}", "pods", "{{pod_name}}", "log"],
+					"query": [
+						{
+							"key": "tailLines",
+							"value": "100"
+						},
+						{
+							"key": "previous",
+							"value": "{{previous}}",
+							"description": "Set to 'true' for crashed containers"
+						},
+						{
+							"key": "container",
+							"value": "{{container_name}}",
+							"description": "Specific container name",
+							"disabled": true
+						}
+					]
+				},
+				"description": "## Get Pod Logs\n\nFetch logs for a specific pod.\n\n### Variables needed:\n- `pod_name`: Name of the pod\n- `previous`: Set to `true` for CrashLoopBackOff pods\n- `container_name`: (optional) Specific container in multi-container pods\n\n### kubectl equivalent:\n```bash\nkubectl logs <pod_name> -n <namespace> --tail=100\nkubectl logs <pod_name> -n <namespace> --previous\n```"
+			},
+			"response": []
 		},
 		{
-			"name": "Scenario: ImagePullBackOff",
-			"item": [
+			"name": "Get Pod Events",
+			"event": [
 				{
-					"name": "1. Check ImagePull Pod Status",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"const response = pm.response.json();",
-									"",
-									"pm.test('Status code is 200', function() {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"const status = response.status;",
-									"console.log('=== ImagePullBackOff Analysis ===');",
-									"console.log('Pod Phase:', status.phase);",
-									"",
-									"if (status.containerStatuses) {",
-									"    status.containerStatuses.forEach(cs => {",
-									"        console.log(`\\nContainer: ${cs.name}`);",
-									"        console.log(`  Image: ${cs.image}`);",
-									"        ",
-									"        if (cs.state.waiting) {",
-									"            console.warn(`  ⚠️ State: Waiting`);",
-									"            console.warn(`  Reason: ${cs.state.waiting.reason}`);",
-									"            console.warn(`  Message: ${cs.state.waiting.message || 'N/A'}`);",
-									"            ",
-									"            pm.test('Detected image pull error', function() {",
-									"                const reason = cs.state.waiting.reason;",
-									"                pm.expect(['ImagePullBackOff', 'ErrImagePull']).to.include(reason);",
-									"            });",
-									"        }",
-									"    });",
-									"}",
-									"",
-									"console.log('\\n💡 Next: Check events for detailed error message');"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/pods/imagepull-app",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "namespaces", "{{namespace}}", "pods", "imagepull-app"]
-						},
-						"description": "**kubectl equivalent:**\n```\nkubectl describe pod imagepull-app -n troubleshooting-demo\n```\n\n**What to look for:**\n1. `status.containerStatuses[].state.waiting.reason` = 'ImagePullBackOff' or 'ErrImagePull'\n2. `status.containerStatuses[].state.waiting.message` - Error details\n3. `spec.containers[].image` - The problematic image"
-					},
-					"response": []
-				},
-				{
-					"name": "2. Get ImagePull Pod Events",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"const response = pm.response.json();",
-									"",
-									"pm.test('Status code is 200', function() {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"console.log('=== ImagePull Pod Events ===');",
-									"",
-									"const events = response.items;",
-									"events.forEach(event => {",
-									"    const icon = event.type === 'Warning' ? '⚠️' : 'ℹ️';",
-									"    console.log(`${icon} [${event.type}] ${event.reason}`);",
-									"    console.log(`   ${event.message}`);",
-									"});",
-									"",
-									"// Check for Failed events",
-									"const failedEvents = events.filter(e => e.reason === 'Failed');",
-									"if (failedEvents.length > 0) {",
-									"    console.log('\\n💡 Root cause found in Failed events');",
-									"    pm.test('Found image pull failure events', function() {",
-									"        pm.expect(failedEvents.length).to.be.above(0);",
-									"    });",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/events?fieldSelector=involvedObject.name=imagepull-app",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "namespaces", "{{namespace}}", "events"],
-							"query": [
-								{
-									"key": "fieldSelector",
-									"value": "involvedObject.name=imagepull-app"
-								}
-							]
-						},
-						"description": "**kubectl equivalent:**\n```\nkubectl get events -n troubleshooting-demo --field-selector involvedObject.name=imagepull-app\n```\n\n**What to look for:**\n- Events with reason='Failed' contain the actual image pull error\n- Message will show 'manifest unknown' or 'not found' for missing images"
-					},
-					"response": []
+					"listen": "test",
+					"script": {
+						"exec": [
+							"const response = pm.response.json();",
+							"const podName = pm.variables.get('pod_name');",
+							"",
+							"console.log('╔══════════════════════════════════════════════════════════════╗');",
+							"console.log(`║ 📅 EVENTS: ${podName}`);",
+							"console.log('╚══════════════════════════════════════════════════════════════╝');",
+							"",
+							"const events = response.items || [];",
+							"",
+							"if (events.length === 0) {",
+							"    console.log('No events found for this pod.');",
+							"} else {",
+							"    // Sort by time (newest first)",
+							"    events.sort((a, b) => {",
+							"        const timeA = new Date(a.lastTimestamp || a.eventTime || 0);",
+							"        const timeB = new Date(b.lastTimestamp || b.eventTime || 0);",
+							"        return timeB - timeA;",
+							"    });",
+							"    ",
+							"    events.forEach(event => {",
+							"        const icon = event.type === 'Warning' ? '⚠️' : 'ℹ️';",
+							"        const time = event.lastTimestamp || event.eventTime || 'N/A';",
+							"        console.log(`${icon} [${event.type}] ${event.reason}`);",
+							"        console.log(`   Time: ${time}`);",
+							"        console.log(`   Message: ${event.message}`);",
+							"        console.log('');",
+							"    });",
+							"}",
+							"",
+							"pm.test('Events retrieved', function() {",
+							"    pm.response.to.have.status(200);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
 				}
 			],
-			"description": "Step-by-step troubleshooting of ImagePullBackOff scenario"
-		},
-		{
-			"name": "Scenario: Pending Pod",
-			"item": [
-				{
-					"name": "1. Check Pending Pod Status",
-					"event": [
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/events?fieldSelector=involvedObject.name={{pod_name}}",
+					"host": ["{{base_url}}"],
+					"path": ["api", "v1", "namespaces", "{{namespace}}", "events"],
+					"query": [
 						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"const response = pm.response.json();",
-									"",
-									"pm.test('Status code is 200', function() {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"const status = response.status;",
-									"console.log('=== Pending Pod Analysis ===');",
-									"console.log('Pod Phase:', status.phase);",
-									"",
-									"pm.test('Pod is in Pending phase', function() {",
-									"    pm.expect(status.phase).to.equal('Pending');",
-									"});",
-									"",
-									"// Check conditions",
-									"if (status.conditions) {",
-									"    console.log('\\nConditions:');",
-									"    status.conditions.forEach(cond => {",
-									"        const icon = cond.status === 'True' ? '✓' : '✗';",
-									"        console.log(`  ${icon} ${cond.type}: ${cond.status}`);",
-									"        if (cond.reason) console.log(`    Reason: ${cond.reason}`);",
-									"        if (cond.message) console.log(`    Message: ${cond.message}`);",
-									"    });",
-									"}",
-									"",
-									"// Check resource requests",
-									"const containers = response.spec.containers;",
-									"console.log('\\nResource Requests:');",
-									"containers.forEach(c => {",
-									"    console.log(`  Container: ${c.name}`);",
-									"    if (c.resources && c.resources.requests) {",
-									"        console.log(`    Memory: ${c.resources.requests.memory}`);",
-									"        console.log(`    CPU: ${c.resources.requests.cpu}`);",
-									"    }",
-									"});",
-									"",
-									"console.log('\\n💡 Next: Check events for FailedScheduling reason');"
-								],
-								"type": "text/javascript"
-							}
+							"key": "fieldSelector",
+							"value": "involvedObject.name={{pod_name}}"
 						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/pods/pending-app",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "namespaces", "{{namespace}}", "pods", "pending-app"]
-						},
-						"description": "**kubectl equivalent:**\n```\nkubectl describe pod pending-app -n troubleshooting-demo\n```\n\n**What to look for:**\n1. `status.phase` = 'Pending'\n2. `status.conditions` - PodScheduled condition will be False\n3. `spec.containers[].resources.requests` - Resource requests"
-					},
-					"response": []
+					]
 				},
-				{
-					"name": "2. Get Pending Pod Events",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"const response = pm.response.json();",
-									"",
-									"pm.test('Status code is 200', function() {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"console.log('=== Pending Pod Events ===');",
-									"",
-									"const events = response.items;",
-									"events.forEach(event => {",
-									"    const icon = event.type === 'Warning' ? '⚠️' : 'ℹ️';",
-									"    console.log(`${icon} [${event.type}] ${event.reason}`);",
-									"    console.log(`   ${event.message}`);",
-									"});",
-									"",
-									"// Check for FailedScheduling",
-									"const schedulingEvents = events.filter(e => e.reason === 'FailedScheduling');",
-									"if (schedulingEvents.length > 0) {",
-									"    console.log('\\n💡 Root cause: FailedScheduling');",
-									"    console.log('The pod requests more resources than any node can provide');",
-									"    ",
-									"    pm.test('Found FailedScheduling events', function() {",
-									"        pm.expect(schedulingEvents.length).to.be.above(0);",
-									"    });",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/events?fieldSelector=involvedObject.name=pending-app",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "namespaces", "{{namespace}}", "events"],
-							"query": [
-								{
-									"key": "fieldSelector",
-									"value": "involvedObject.name=pending-app"
-								}
-							]
-						},
-						"description": "**kubectl equivalent:**\n```\nkubectl get events -n troubleshooting-demo --field-selector involvedObject.name=pending-app\n```\n\n**What to look for:**\n- Events with reason='FailedScheduling'\n- Message explains why scheduling failed (insufficient memory, cpu, etc.)"
-					},
-					"response": []
-				},
-				{
-					"name": "3. Check Node Resources",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"const response = pm.response.json();",
-									"",
-									"pm.test('Status code is 200', function() {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"console.log('=== Node Resources ===');",
-									"",
-									"response.items.forEach(node => {",
-									"    console.log(`\\nNode: ${node.metadata.name}`);",
-									"    ",
-									"    const capacity = node.status.capacity;",
-									"    const allocatable = node.status.allocatable;",
-									"    ",
-									"    console.log('  Capacity:');",
-									"    console.log(`    CPU: ${capacity.cpu}`);",
-									"    console.log(`    Memory: ${capacity.memory}`);",
-									"    ",
-									"    console.log('  Allocatable:');",
-									"    console.log(`    CPU: ${allocatable.cpu}`);",
-									"    console.log(`    Memory: ${allocatable.memory}`);",
-									"});",
-									"",
-									"console.log('\\n💡 Compare node allocatable resources with pod requests');",
-									"console.log('   pending-app requests 100Gi memory - no node can provide this');"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/nodes",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "nodes"]
-						},
-						"description": "**kubectl equivalent:**\n```\nkubectl describe nodes\nkubectl get nodes -o wide\n```\n\n**What to look for:**\n- `status.capacity` - Total node resources\n- `status.allocatable` - Resources available for pods\n- Compare with pod's resource requests"
-					},
-					"response": []
-				}
-			],
-			"description": "Step-by-step troubleshooting of Pending pod scenario"
-		},
-		{
-			"name": "Automation",
-			"item": [
-				{
-					"name": "Health Check - All Pods",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"const response = pm.response.json();",
-									"",
-									"pm.test('API is accessible', function() {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"const pods = response.items;",
-									"let healthyCount = 0;",
-									"let problemCount = 0;",
-									"const problems = [];",
-									"",
-									"console.log('=== Pod Health Check ===');",
-									"console.log(`Total pods: ${pods.length}\\n`);",
-									"",
-									"pods.forEach(pod => {",
-									"    const name = pod.metadata.name;",
-									"    const phase = pod.status.phase;",
-									"    let status = '✓ Healthy';",
-									"    let issue = null;",
-									"    ",
-									"    // Check for non-running pods",
-									"    if (phase !== 'Running' && phase !== 'Succeeded') {",
-									"        status = '✗ Problem';",
-									"        issue = `Phase: ${phase}`;",
-									"    }",
-									"    ",
-									"    // Check container statuses",
-									"    if (pod.status.containerStatuses) {",
-									"        pod.status.containerStatuses.forEach(cs => {",
-									"            if (cs.state.waiting) {",
-									"                status = '✗ Problem';",
-									"                issue = cs.state.waiting.reason;",
-									"            }",
-									"            if (cs.restartCount > 5) {",
-									"                status = '⚠️ Warning';",
-									"                issue = `High restart count: ${cs.restartCount}`;",
-									"            }",
-									"        });",
-									"    }",
-									"    ",
-									"    if (status.includes('Problem') || status.includes('Warning')) {",
-									"        problemCount++;",
-									"        problems.push({ name, issue });",
-									"        console.log(`${status} ${name}: ${issue}`);",
-									"    } else {",
-									"        healthyCount++;",
-									"        console.log(`${status} ${name}`);",
-									"    }",
-									"});",
-									"",
-									"console.log(`\\nSummary: ${healthyCount} healthy, ${problemCount} problems`);",
-									"",
-									"// Test for problems",
-									"pm.test(`Found ${problemCount} problem pod(s)`, function() {",
-									"    // This test always passes - it's informational",
-									"    pm.expect(true).to.be.true;",
-									"});",
-									"",
-									"if (problems.length > 0) {",
-									"    console.log('\\nProblem pods requiring attention:');",
-									"    problems.forEach(p => console.log(`  - ${p.name}: ${p.issue}`));",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/pods",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "namespaces", "{{namespace}}", "pods"]
-						},
-						"description": "**Automation Example**\n\nThis request demonstrates how Postman can automate health checks:\n1. Fetches all pods\n2. Analyzes each pod's status\n3. Identifies problems automatically\n4. Provides a summary\n\n**Use with Collection Runner:**\n- Schedule periodic health checks\n- Run across multiple environments (clusters)\n- Export results for reporting"
-					},
-					"response": []
-				},
-				{
-					"name": "Problem Pod Detector",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"const response = pm.response.json();",
-									"",
-									"pm.test('API is accessible', function() {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"const pods = response.items;",
-									"",
-									"console.log('=== Problem Pod Detection ===\\n');",
-									"",
-									"// Define problem patterns",
-									"const problemPatterns = [",
-									"    { phase: 'Pending', severity: 'warning' },",
-									"    { waiting: 'CrashLoopBackOff', severity: 'critical' },",
-									"    { waiting: 'ImagePullBackOff', severity: 'critical' },",
-									"    { waiting: 'ErrImagePull', severity: 'critical' },",
-									"    { waiting: 'CreateContainerConfigError', severity: 'critical' },",
-									"];",
-									"",
-									"const detected = {",
-									"    critical: [],",
-									"    warning: []",
-									"};",
-									"",
-									"pods.forEach(pod => {",
-									"    const name = pod.metadata.name;",
-									"    const phase = pod.status.phase;",
-									"    ",
-									"    // Check phase",
-									"    if (phase === 'Pending') {",
-									"        detected.warning.push({ name, issue: 'Pod is Pending' });",
-									"    }",
-									"    ",
-									"    // Check container statuses",
-									"    if (pod.status.containerStatuses) {",
-									"        pod.status.containerStatuses.forEach(cs => {",
-									"            if (cs.state.waiting) {",
-									"                const reason = cs.state.waiting.reason;",
-									"                const criticalReasons = ['CrashLoopBackOff', 'ImagePullBackOff', 'ErrImagePull', 'CreateContainerConfigError'];",
-									"                ",
-									"                if (criticalReasons.includes(reason)) {",
-									"                    detected.critical.push({ name, issue: reason });",
-									"                }",
-									"            }",
-									"        });",
-									"    }",
-									"});",
-									"",
-									"// Report",
-									"if (detected.critical.length > 0) {",
-									"    console.log('🔴 CRITICAL Issues:');",
-									"    detected.critical.forEach(p => console.log(`   ${p.name}: ${p.issue}`));",
-									"}",
-									"",
-									"if (detected.warning.length > 0) {",
-									"    console.log('\\n🟡 Warnings:');",
-									"    detected.warning.forEach(p => console.log(`   ${p.name}: ${p.issue}`));",
-									"}",
-									"",
-									"if (detected.critical.length === 0 && detected.warning.length === 0) {",
-									"    console.log('🟢 No problems detected!');",
-									"}",
-									"",
-									"// Fail test if critical issues found (useful for CI/CD)",
-									"pm.test('No critical issues', function() {",
-									"    if (detected.critical.length > 0) {",
-									"        pm.expect.fail(`Critical issues found: ${detected.critical.map(p => p.name).join(', ')}`);",
-									"    }",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/namespaces/{{namespace}}/pods",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "namespaces", "{{namespace}}", "pods"]
-						},
-						"description": "**Advanced Automation**\n\nThis request acts like a monitoring check:\n1. Scans all pods for known problem patterns\n2. Categorizes issues by severity\n3. Fails the test if critical issues found\n\n**Use in CI/CD:**\n- Run after deployments to verify health\n- Integrate with Newman (Postman CLI)\n- Trigger alerts on failures"
-					},
-					"response": []
-				}
-			],
-			"description": "Automated health checks and monitoring examples"
-		},
-		{
-			"name": "Cluster Info",
-			"item": [
-				{
-					"name": "API Server Version",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"const response = pm.response.json();",
-									"",
-									"pm.test('Status code is 200', function() {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"console.log('Kubernetes Version:', response.gitVersion);",
-									"console.log('Platform:', response.platform);"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/version",
-							"host": ["{{base_url}}"],
-							"path": ["version"]
-						},
-						"description": "**kubectl equivalent:**\n```\nkubectl version\n```\n\nReturns the Kubernetes server version."
-					},
-					"response": []
-				},
-				{
-					"name": "List Namespaces",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"const response = pm.response.json();",
-									"",
-									"pm.test('Status code is 200', function() {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"console.log('Namespaces:');",
-									"response.items.forEach(ns => {",
-									"    console.log(`  - ${ns.metadata.name}`);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/namespaces",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "namespaces"]
-						},
-						"description": "**kubectl equivalent:**\n```\nkubectl get namespaces\n```"
-					},
-					"response": []
-				},
-				{
-					"name": "List All Nodes",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/nodes",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "nodes"]
-						},
-						"description": "**kubectl equivalent:**\n```\nkubectl get nodes -o wide\n```"
-					},
-					"response": []
-				}
-			],
-			"description": "General cluster information requests"
+				"description": "## Get Pod Events\n\nFetch Kubernetes events for a specific pod. Useful for:\n- ImagePullBackOff details\n- FailedScheduling reasons\n- Container lifecycle events\n\n### Variables needed:\n- `pod_name`: Name of the pod\n\n### kubectl equivalent:\n```bash\nkubectl get events -n <namespace> --field-selector involvedObject.name=<pod_name>\n```"
+			},
+			"response": []
 		}
 	],
 	"event": [
@@ -1029,22 +475,10 @@
 			"script": {
 				"type": "text/javascript",
 				"exec": [
-					"// Global pre-request script",
-					"// Set default namespace if not already set",
-					"if (!pm.variables.get('namespace')) {",
-					"    pm.variables.set('namespace', 'troubleshooting-demo');",
+					"// Set defaults if not provided",
+					"if (!pm.variables.get('previous')) {",
+					"    pm.variables.set('previous', 'false');",
 					"}"
-				]
-			}
-		},
-		{
-			"listen": "test",
-			"script": {
-				"type": "text/javascript",
-				"exec": [
-					"// Global test script",
-					"// Log response time for performance monitoring",
-					"console.log(`Response time: ${pm.response.responseTime}ms`);"
 				]
 			}
 		}
@@ -1052,14 +486,33 @@
 	"variable": [
 		{
 			"key": "namespace",
-			"value": "troubleshooting-demo",
-			"type": "string"
+			"value": "demo",
+			"type": "string",
+			"description": "Target namespace to analyze"
 		},
 		{
 			"key": "pod_name",
-			"value": "healthy-app",
-			"type": "string"
+			"value": "",
+			"type": "string",
+			"description": "Pod name for logs/events"
+		},
+		{
+			"key": "previous",
+			"value": "false",
+			"type": "string",
+			"description": "Set to 'true' for crashed container logs"
+		},
+		{
+			"key": "container_name",
+			"value": "",
+			"type": "string",
+			"description": "Container name for multi-container pods"
+		},
+		{
+			"key": "diagnostic_results",
+			"value": "",
+			"type": "string",
+			"description": "Stored results from diagnostics"
 		}
 	]
 }
-

@@ -1,0 +1,126 @@
+# demo2-pods.yaml
+# Mixed healthy and unhealthy pods for namespace: demo2
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo2
+
+---
+# Healthy Pod 1 - nginx web server
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-server
+  namespace: demo2
+  labels:
+    app: web-server
+    status: healthy
+spec:
+  containers:
+    - name: nginx
+      image: nginx:1.25-alpine
+      ports:
+        - containerPort: 80
+      resources:
+        requests:
+          memory: "64Mi"
+          cpu: "50m"
+        limits:
+          memory: "128Mi"
+          cpu: "100m"
+
+---
+# Healthy Pod 2 - redis cache
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cache-server
+  namespace: demo2
+  labels:
+    app: cache-server
+    status: healthy
+spec:
+  containers:
+    - name: redis
+      image: redis:7-alpine
+      ports:
+        - containerPort: 6379
+      resources:
+        requests:
+          memory: "64Mi"
+          cpu: "50m"
+        limits:
+          memory: "128Mi"
+          cpu: "100m"
+
+---
+# Unhealthy Pod 1 - CrashLoopBackOff
+apiVersion: v1
+kind: Pod
+metadata:
+  name: broken-worker
+  namespace: demo2
+  labels:
+    app: broken-worker
+    status: unhealthy
+    issue: crashloop
+spec:
+  containers:
+    - name: worker
+      image: busybox:1.36
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          echo "Worker starting..."
+          echo "FATAL: Database connection refused"
+          exit 1
+      resources:
+        requests:
+          memory: "32Mi"
+          cpu: "10m"
+
+---
+# Unhealthy Pod 2 - ImagePullBackOff
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-image-app
+  namespace: demo2
+  labels:
+    app: bad-image-app
+    status: unhealthy
+    issue: imagepull
+spec:
+  containers:
+    - name: app
+      image: mycompany/internal-app:v99.99.99
+      ports:
+        - containerPort: 8080
+      resources:
+        requests:
+          memory: "64Mi"
+          cpu: "50m"
+
+---
+# Unhealthy Pod 3 - Pending (excessive resources)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: resource-hog
+  namespace: demo2
+  labels:
+    app: resource-hog
+    status: unhealthy
+    issue: pending
+spec:
+  containers:
+    - name: hog
+      image: nginx:1.25-alpine
+      resources:
+        requests:
+          memory: "500Gi"
+          cpu: "100m"
+
